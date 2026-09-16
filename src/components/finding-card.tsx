@@ -1,7 +1,10 @@
 // ============================================================
 // Finding card — displays a single analysis finding
 // Shows: flagged text (quoted), issue explanation, suggested fix,
-// severity badge, and source indicator
+// priority badge, and detection method
+//
+// FRAMING: severity reads as "priority to address" not a grade.
+// Colors are warm/neutral, never red = "you failed."
 // ============================================================
 
 "use client";
@@ -14,22 +17,27 @@ interface Props {
   dotColor: string;
 }
 
+/**
+ * Priority badges — coaching language, not grading language.
+ * "Address first" > "Worth reviewing" > "Optional polish"
+ */
 const SEVERITY_STYLES: Record<Severity, { bg: string; text: string; label: string }> = {
-  high: { bg: "bg-red-50", text: "text-red-700", label: "High" },
-  medium: { bg: "bg-amber-50", text: "text-amber-700", label: "Medium" },
-  low: { bg: "bg-gray-50", text: "text-gray-600", label: "Low" },
+  high: { bg: "bg-amber-50", text: "text-amber-800", label: "Address first" },
+  medium: { bg: "bg-sky-50", text: "text-sky-800", label: "Worth reviewing" },
+  low: { bg: "bg-gray-100", text: "text-gray-600", label: "Optional polish" },
 };
 
-const SOURCE_STYLES: Record<FindingSource, { icon: string; label: string; title: string }> = {
+/**
+ * Detection method — informational, not evaluative.
+ */
+const SOURCE_STYLES: Record<FindingSource, { label: string; title: string }> = {
   deterministic: {
-    icon: "🔒",
-    label: "Exact match",
-    title: "Detected by deterministic analysis (confidence: 100%)",
+    label: "Pattern match",
+    title: "Found by exact citation/reference matching",
   },
   llm: {
-    icon: "🔍",
-    label: "AI analysis",
-    title: "Detected by AI semantic analysis",
+    label: "Writing analysis",
+    title: "Found by AI review of your writing",
   },
 };
 
@@ -52,7 +60,7 @@ export default function FindingCard({ finding, dotColor }: Props) {
           {/* Issue explanation */}
           <p className="mt-2 text-sm text-gray-600">{finding.issue}</p>
 
-          {/* Metadata row: severity + source */}
+          {/* Metadata row: priority + detection method */}
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <span
               className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severity.bg} ${severity.text}`}
@@ -60,10 +68,9 @@ export default function FindingCard({ finding, dotColor }: Props) {
               {severity.label}
             </span>
             <span
-              className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+              className="inline-flex items-center rounded-full bg-gray-50 px-2 py-0.5 text-xs text-gray-500"
               title={source.title}
             >
-              <span>{source.icon}</span>
               {source.label}
             </span>
           </div>
