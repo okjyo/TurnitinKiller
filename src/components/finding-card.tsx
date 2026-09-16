@@ -1,20 +1,43 @@
 // ============================================================
 // Finding card — displays a single analysis finding
-// Shows: flagged text (quoted), issue explanation, suggested fix
+// Shows: flagged text (quoted), issue explanation, suggested fix,
+// severity badge, and source indicator
 // ============================================================
 
 "use client";
 
 import { useState } from "react";
-import type { Finding } from "@/lib/types";
+import type { Finding, Severity, FindingSource } from "@/lib/types";
 
 interface Props {
   finding: Finding;
   dotColor: string;
 }
 
+const SEVERITY_STYLES: Record<Severity, { bg: string; text: string; label: string }> = {
+  high: { bg: "bg-red-50", text: "text-red-700", label: "High" },
+  medium: { bg: "bg-amber-50", text: "text-amber-700", label: "Medium" },
+  low: { bg: "bg-gray-50", text: "text-gray-600", label: "Low" },
+};
+
+const SOURCE_STYLES: Record<FindingSource, { icon: string; label: string; title: string }> = {
+  deterministic: {
+    icon: "🔒",
+    label: "Exact match",
+    title: "Detected by deterministic analysis (confidence: 100%)",
+  },
+  llm: {
+    icon: "🔍",
+    label: "AI analysis",
+    title: "Detected by AI semantic analysis",
+  },
+};
+
 export default function FindingCard({ finding, dotColor }: Props) {
   const [showFix, setShowFix] = useState(false);
+
+  const severity = SEVERITY_STYLES[finding.severity] ?? SEVERITY_STYLES.medium;
+  const source = SOURCE_STYLES[finding.source] ?? SOURCE_STYLES.llm;
 
   return (
     <div className="rounded-md border border-gray-100 bg-gray-50 p-4">
@@ -28,6 +51,22 @@ export default function FindingCard({ finding, dotColor }: Props) {
 
           {/* Issue explanation */}
           <p className="mt-2 text-sm text-gray-600">{finding.issue}</p>
+
+          {/* Metadata row: severity + source */}
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${severity.bg} ${severity.text}`}
+            >
+              {severity.label}
+            </span>
+            <span
+              className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
+              title={source.title}
+            >
+              <span>{source.icon}</span>
+              {source.label}
+            </span>
+          </div>
 
           {/* Suggested fix — collapsible */}
           {finding.suggestedFix && (

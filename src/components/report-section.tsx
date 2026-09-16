@@ -68,9 +68,9 @@ export default function ReportSection({ category, findings }: Props) {
       {/* Findings list */}
       {expanded && (
         <div className="border-t border-gray-100 px-5 py-4 space-y-3">
-          {findings.map((finding, i) => (
+          {findings.map((finding) => (
             <FindingCard
-              key={i}
+              key={finding.id}
               finding={finding}
               dotColor={dotColorMap[category] || "bg-gray-500"}
             />

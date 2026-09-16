@@ -1,6 +1,6 @@
 // ============================================================
-// POST /api/analyze — accepts a document, runs LLM analysis,
-// saves the report, and returns the report ID
+// POST /api/analyze — accepts a document, runs the analysis
+// pipeline (deterministic + LLM), saves the report, returns ID
 // ============================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -11,20 +11,21 @@ import {
   extractBibliography,
   countReferences,
 } from "@/lib/parsing/bibliography";
-import { analyzeDocument } from "@/lib/llm/analyzer";
+import { runDeterministicAnalysis } from "@/lib/analysis/deterministic";
+import { runLLMAnalysis } from "@/lib/analysis/llm-analysis";
+import { mergeFindings } from "@/lib/analysis/merge";
+import { SEVERITY_MAP } from "@/lib/analysis/severity";
 import { MAX_FILE_SIZE_BYTES } from "@/lib/constants";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 // ─────────────────────────────────────────────
-// MIME type allowlist — validates actual content type,
-// not just the file extension
+// MIME type allowlist
 // ─────────────────────────────────────────────
 
 const ALLOWED_MIME_TYPES = new Set([
   "text/plain",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/pdf",
-  // Some browsers/tools use these for .txt files
   "text/plain; charset=utf-8",
   "text/plain; charset=UTF-8",
 ]);
@@ -36,19 +37,15 @@ const ALLOWED_MIME_TYPES = new Set([
 const RATE_LIMIT_MAX = 1;
 const RATE_LIMIT_WINDOW_MS = 10_000;
 
-// ─────────────────────────────────────────────
-// MIME normalization — strip charset suffixes for
-// comparison since our set uses bare types
-// ─────────────────────────────────────────────
-
 function isAllowedMimeType(type: string): boolean {
   if (ALLOWED_MIME_TYPES.has(type)) return true;
-  // Strip charset and re-check
   const bare = type.split(";")[0].trim();
   return ALLOWED_MIME_TYPES.has(bare);
 }
 
 export async function POST(request: NextRequest) {
+  const pipelineStart = Date.now();
+
   try {
     // ── Auth ────────────────────────────────────
     const supabase = await getSupabaseServerClient();
@@ -116,7 +113,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Reject conflicting inputs
     if (hasPastedText && hasFile) {
       return NextResponse.json(
         {
@@ -133,7 +129,6 @@ export async function POST(request: NextRequest) {
     if (hasFile) {
       const uploaded = file as File;
 
-      // Size check
       const maxSizeMB = Math.round(MAX_FILE_SIZE_BYTES / 1024 / 1024);
       if (uploaded.size > MAX_FILE_SIZE_BYTES) {
         return NextResponse.json(
@@ -144,7 +139,6 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // MIME type check
       if (uploaded.type && !isAllowedMimeType(uploaded.type)) {
         return NextResponse.json(
           {
@@ -168,7 +162,6 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: message }, { status: 400 });
       }
     } else {
-      // Normalize pasted text (fix line endings, collapse whitespace)
       assignmentText = normalizeText(rawText);
     }
 
@@ -183,10 +176,6 @@ export async function POST(request: NextRequest) {
     }
 
     // ── Bibliography handling ───────────────────
-    // Priority:
-    // 1. User provided a separate bibliography → use it directly
-    // 2. No separate bibliography → try to auto-detect a References
-    //    section in the main text and split it out
     let finalBodyText = assignmentText;
     let finalBibliography = bibliographyRaw.trim() || "";
     let bibliographyWasAutoDetected = false;
@@ -227,15 +216,24 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // ── Run the LLM analysis ───────────────────
-    let reportData;
+    // ── PHASE 1: Deterministic analysis ────────
+    const deterministicFindings = runDeterministicAnalysis(
+      finalBodyText,
+      finalBibliography || null
+    );
+
+    console.log(
+      `Deterministic analysis: ${deterministicFindings.length} findings`
+    );
+
+    // ── PHASE 2: LLM semantic analysis ────────
+    let llmResult;
     try {
-      reportData = await analyzeDocument({
+      llmResult = await runLLMAnalysis({
         text: finalBodyText,
         bibliography: finalBibliography || undefined,
       });
     } catch (err) {
-      // analyzer.ts already sanitizes errors — pass the message through
       const message =
         err instanceof Error
           ? err.message
@@ -243,11 +241,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: message }, { status: 500 });
     }
 
+    console.log(
+      `LLM analysis: ${llmResult.findings.length} findings, ` +
+        `summary: "${llmResult.summary.slice(0, 80)}..."`
+    );
+
+    // ── PHASE 3: Merge ────────────────────────
+    const processingTimeMs = Date.now() - pipelineStart;
+    const reportData = mergeFindings(
+      deterministicFindings,
+      llmResult,
+      processingTimeMs
+    );
+
     // If we auto-detected the bibliography, add a structural finding
-    // so the student knows it was found and can verify it
     if (bibliographyWasAutoDetected && finalBibliography) {
       const refCount = countReferences(finalBibliography);
       reportData.findings.unshift({
+        id: crypto.randomUUID(),
         flaggedText: "(Reference list detected automatically)",
         issue:
           `We found a reference list in your paper with approximately ${refCount} ` +
@@ -258,8 +269,17 @@ export async function POST(request: NextRequest) {
           "If your paper has multiple sections with source lists, consider pasting " +
           "the bibliography separately for more accurate analysis.",
         category: "structural-issue",
+        severity: SEVERITY_MAP["structural-issue"],
+        confidence: 1.0,
+        source: "deterministic",
       });
     }
+
+    console.log(
+      `Pipeline complete: ${reportData.meta.deterministicFindings} deterministic + ` +
+        `${reportData.meta.llmFindings} LLM = ${reportData.findings.length} total findings ` +
+        `in ${processingTimeMs}ms`
+    );
 
     // ── Save the report ────────────────────────
     const { data: report, error: reportError } = await supabase

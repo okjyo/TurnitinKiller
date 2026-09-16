@@ -6,7 +6,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { Finding, FindingCategory, ReportData } from "@/lib/types";
+import type { Finding, FindingCategory } from "@/lib/types";
+import { parseReportData } from "@/lib/types";
 import { CATEGORY_LABELS } from "@/lib/constants";
 import ReportSection from "@/components/report-section";
 
@@ -57,12 +58,10 @@ export default async function ReportPage({ params }: PageProps) {
     notFound();
   }
 
-  // Parse report data defensively
-  const reportData = (report.report_data || {}) as Partial<ReportData>;
-  const findings: Finding[] = Array.isArray(reportData.findings)
-    ? reportData.findings
-    : [];
-  const summary = reportData.summary || "";
+  // Parse report data (handles both old and new format)
+  const reportData = parseReportData(report.report_data);
+  const findings = reportData.findings;
+  const summary = reportData.summary;
 
   // Group findings by category
   const grouped: Record<string, Finding[]> = {};
