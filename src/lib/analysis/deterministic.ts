@@ -3,6 +3,11 @@
 //
 // Runs regex-based citation/reference checks with zero LLM calls.
 // All findings from this phase have confidence 1.0.
+//
+// KEY MATCHING STRATEGY:
+// Both citations and bib entries are normalized to `firstauthor:year`.
+// "Smith et al. (2023)", "Smith, J., Brown, A. (2023)", and
+// "Smith (2023)" all normalize to `smith:2023`.
 // ============================================================
 
 import type { Finding, FindingCategory } from "./schema";
@@ -21,16 +26,16 @@ interface ExtractedCitation {
   index: number;
 }
 
-/** APA: (Smith, 2024), (Smith & Jones, 2024), (Smith et al., 2024) */
-const APA_PAREN = /\(([A-Z][a-z]+(?:\s+(?:&|and)\s+[A-Z][a-z]+|(?:\s+et\s+al\.))?),?\s+(\d{4})\)/g;
+/** APA: (Smith, 2024), (Smith & Jones, 2024), (Smith et al., 2024), (World Bank, 2023) */
+const APA_PAREN = /\(([A-Z][A-Z]+|[A-Z][a-z]+)(?:\s+[a-z]+\.?)*(?:\s*(?:&|and)\s+[A-Z][a-z]+)?(?:\s+[A-Z][a-z]+)*,?\s+(\d{4})\)/g;
 
-/** APA narrative: Smith (2024), Smith and Jones (2024), Smith et al. (2024) */
-const APA_NARRATIVE = /\b([A-Z][a-z]+(?:(?:\s+(?:&|and)\s+[A-Z][a-z]+)|(?:\s+et\s+al\.))?)\s+\((\d{4})\)/g;
+/** APA narrative: Smith (2024), World Bank (2023), Smith et al. (2024) */
+const APA_NARRATIVE = /\b(?:The\s+)?([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*?(?:\s+(?:and|&)\s+[A-Z][a-z]+)?(?:\s+et\s+al\.)?)\s+\((\d{4})\)/g;
 
 /** MLA: (Smith 45), (Smith and Jones 112) */
 const MLA = /\(([A-Z][a-z]+(?:\s+and\s+[A-Z][a-z]+)?)\s+(\d{1,4})\)/g;
 
-/** Numbered: [1], [1, 3], [1, 2, 5], [1-3] */
+/** Numbered: [1], [1, 3], [1-3] */
 const NUMBERED = /\[(\d+(?:\s*[-–,]\s*\d+)*)\]/g;
 
 /**
@@ -39,14 +44,14 @@ const NUMBERED = /\[(\d+(?:\s*[-–,]\s*\d+)*)\]/g;
  */
 export function extractCitations(bodyText: string): ExtractedCitation[] {
   const citations: ExtractedCitation[] = [];
-  const seen = new Set<string>(); // avoid duplicates at same position
+  const seen = new Set<string>();
 
   let match: RegExpExecArray | null;
 
   // APA parenthetical: (Author, Year)
   while ((match = APA_PAREN.exec(bodyText)) !== null) {
     const raw = match[0];
-    const author = normalizeAuthor(match[1]);
+    const author = extractFirstSurname(match[1]);
     const year = match[2];
     const key = `${author}:${year}`;
     const id = `${match.index}:${raw}`;
@@ -59,7 +64,7 @@ export function extractCitations(bodyText: string): ExtractedCitation[] {
   // APA narrative: Author (Year)
   while ((match = APA_NARRATIVE.exec(bodyText)) !== null) {
     const raw = match[0];
-    const author = normalizeAuthor(match[1]);
+    const author = extractFirstSurname(match[1]);
     const year = match[2];
     const key = `${author}:${year}`;
     const id = `${match.index}:${raw}`;
@@ -72,7 +77,7 @@ export function extractCitations(bodyText: string): ExtractedCitation[] {
   // MLA: (Author Page)
   while ((match = MLA.exec(bodyText)) !== null) {
     const raw = match[0];
-    const author = normalizeAuthor(match[1]);
+    const author = extractFirstSurname(match[1]);
     const key = `mla:${author}`;
     const id = `${match.index}:${raw}`;
     if (!seen.has(id)) {
@@ -101,10 +106,8 @@ export function extractCitations(bodyText: string): ExtractedCitation[] {
 /** Parse "1, 3" or "1-3" into [1, 2, 3] */
 function parseNumberList(s: string): number[] {
   const nums: number[] = [];
-  // Split by comma first
   for (const part of s.split(/[,]/)) {
     const trimmed = part.trim();
-    // Check for range: "1-3" or "1–3"
     const rangeMatch = trimmed.match(/^(\d+)\s*[-–]\s*(\d+)$/);
     if (rangeMatch) {
       const start = parseInt(rangeMatch[1], 10);
@@ -135,7 +138,7 @@ interface ParsedBibEntry {
 
 /**
  * Parse bibliography entries into normalized keys.
- * Tries APA, numbered, and MLA patterns.
+ * Key format: `firstauthor:year` (APA), `num:N` (numbered), `mla:author` (MLA).
  */
 export function parseBibliographyEntries(bibliography: string): ParsedBibEntry[] {
   const lines = bibliography.split("\n").filter((l) => l.trim().length > 0);
@@ -155,13 +158,15 @@ export function parseBibliographyEntries(bibliography: string): ParsedBibEntry[]
       continue;
     }
 
-    // APA: Author, A. B. (Year). Title...
-    // Handles: "Smith, J. (2024)", "Smith, J (2024)", "Smith et al. (2024)"
-    const apaMatch = line.match(
-      /^([A-Z][a-z]+(?:\s+(?:&|and)\s+[A-Z][a-z]+|(?:\s+et\s+al\.))?),?\s*(?:[A-Z]\.?\s*)*\(?(\d{4})\)?/
-    );
-    if (apaMatch) {
-      const author = normalizeAuthor(apaMatch[1]);
+    // APA: first word at line start = first author/org surname, year in parens later.
+    // ^\s*([A-Z][A-Z]+|[A-Z][a-z]+) — first word only (org "IPCC" or surname "Smith")
+    // \b.*?\(\s*(\d{4}) — skip everything until the year in parens.
+    // "Smith, J., Brown, A. (2023)" → "Smith" + "2023" = smith:2023
+    // "World Bank (2023)" → "World" + "2023" = world:2023
+    // "IPCC (2023)" → "IPCC" + "2023" = ipcc:2023
+    const apaMatch = line.match(/^\s*([A-Z][A-Z]+|[A-Z][a-z]+)\b.*?\(\s*(\d{4})\s*\)?/);
+    if (apaMatch && /^\d{4}$/.test(apaMatch[2])) {
+      const author = extractFirstSurname(apaMatch[1]);
       const year = apaMatch[2];
       entries.push({
         key: `${author}:${year}`,
@@ -171,29 +176,18 @@ export function parseBibliographyEntries(bibliography: string): ParsedBibEntry[]
       continue;
     }
 
-    // Organization/agency: IPCC (2023)...
-    const orgMatch = line.match(/^([A-Z][A-Z]+)\s*\(?(\d{4})\)?/);
-    if (orgMatch) {
-      entries.push({
-        key: `${orgMatch[1].toLowerCase()}:${orgMatch[2]}`,
-        rawText: line,
-        index: i,
-      });
-      continue;
-    }
-
-    // MLA: Author, Title...
+    // MLA fallback: Author, Title... (no year in parens)
     const mlaMatch = line.match(/^([A-Z][a-z]+(?:\s+and\s+[A-Z][a-z]+)?),/);
     if (mlaMatch) {
       entries.push({
-        key: `mla:${normalizeAuthor(mlaMatch[1])}`,
+        key: `mla:${mlaMatch[1].toLowerCase()}`,
         rawText: line,
         index: i,
       });
       continue;
     }
 
-    // Fallback: use the first 50 chars as a fuzzy key
+    // Fallback
     entries.push({
       key: `raw:${line.slice(0, 50).toLowerCase()}`,
       rawText: line,
@@ -268,10 +262,9 @@ export function runDeterministicAnalysis(
   const source = "deterministic" as const;
   const confidence = DEFAULT_CONFIDENCE.deterministic;
 
-  // ── Extract citations from body ──
   const citations = extractCitations(bodyText);
 
-  // ── Check citation style consistency ──
+  // ── Citation style consistency ──
   const styleInfo = detectCitationStyles(bodyText);
   if (styleInfo.styleCount > 1) {
     findings.push(createFinding({
@@ -288,10 +281,7 @@ export function runDeterministicAnalysis(
     }));
   }
 
-  // If no bibliography, we can still detect style issues but can't match
-  if (!bibliography) {
-    return findings;
-  }
+  if (!bibliography) return findings;
 
   // ── Parse bibliography entries ──
   const bibEntries = parseBibliographyEntries(bibliography);
@@ -300,10 +290,8 @@ export function runDeterministicAnalysis(
   const citedKeys = new Set(citations.map((c) => c.key));
   const bibKeys = new Set(bibEntries.map((e) => e.key));
 
-  // Citation orphans: in-text citations that don't match any bib entry
+  // Citation orphans
   const orphanedCites = citations.filter((c) => !bibKeys.has(c.key));
-
-  // Deduplicate by key (same reference cited multiple times)
   const seenKeys = new Set<string>();
   for (const cite of orphanedCites) {
     if (seenKeys.has(cite.key)) continue;
@@ -323,9 +311,8 @@ export function runDeterministicAnalysis(
     }));
   }
 
-  // Bibliography orphans: bib entries never cited in body
+  // Bibliography orphans
   const uncitedEntries = bibEntries.filter((e) => !citedKeys.has(e.key));
-
   for (const entry of uncitedEntries) {
     const shortPreview =
       entry.rawText.length > 80
@@ -338,7 +325,7 @@ export function runDeterministicAnalysis(
         "This reference doesn't appear to be cited anywhere in your paper. " +
         "If you used it, add an in-text citation. If not, removing it keeps your reference list focused.",
       suggestedFix:
-        `Add an in-text citation where you discuss this source, or remove it from your reference list if it wasn't used.`,
+        "Add an in-text citation where you discuss this source, or remove it from your reference list if it wasn't used.",
       category: "bibliography-orphan",
       source,
       confidence,
@@ -352,11 +339,15 @@ export function runDeterministicAnalysis(
 // Helpers
 // ─────────────────────────────────────────────
 
-function normalizeAuthor(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/et\s+al\.?/, "etal")
-    .replace(/[^a-z]/g, "");
+/**
+ * Extract just the first surname from an author string.
+ * "Smith et al." → "smith"
+ * "Chen and Williams" → "chen"
+ * "Smith" → "smith"
+ */
+function extractFirstSurname(author: string): string {
+  const firstWord = author.trim().split(/\s+/)[0];
+  return firstWord.toLowerCase().replace(/[^a-z]/g, "");
 }
 
 function createFinding(params: {

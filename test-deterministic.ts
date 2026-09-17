@@ -45,11 +45,19 @@ test("extracts APA with multiple authors", () => {
   assert(cites[0].key.includes("smith"), "should normalize author");
 });
 
+test("extracts APA two-author ampersand citation (Diekelmann & Born)", () => {
+  // Exact pattern from user bug report
+  const text = "...sleep can influence the retention of newly learned information (Diekelmann & Born, 2010).";
+  const cites = extractCitations(text);
+  assert(cites.length === 1, `expected 1, got ${cites.length}`);
+  assert(cites[0].key === "diekelmann:2010", `got ${cites[0].key}`);
+});
+
 test("extracts APA et al.", () => {
   const text = "According to (Smith et al., 2022), the results are clear.";
   const cites = extractCitations(text);
   assert(cites.length === 1, `expected 1, got ${cites.length}`);
-  assert(cites[0].key === "smithetal:2022", `got ${cites[0].key}`);
+  assert(cites[0].key === "smith:2022", `got ${cites[0].key}`);
 });
 
 test("extracts APA narrative citations", () => {
@@ -159,6 +167,16 @@ test("detects bibliography orphans", () => {
     bibOrphans[0].flaggedText.includes("Doe") || bibOrphans[0].flaggedText.includes("Unused"),
     `should flag Doe/Unused, got ${bibOrphans[0].flaggedText}`
   );
+});
+
+test("two-author ampersand citation matches its bib entry (no orphan)", () => {
+  // Exact pattern from user bug report
+  const body =
+    "Sleep can influence the retention of newly learned information (Diekelmann & Born, 2010).";
+  const bib = "Diekelmann, S., & Born, J. (2010). The memory function of sleep. Nature Reviews Neuroscience, 11(2), 114-126.";
+  const findings = runDeterministicAnalysis(body, bib);
+  const orphans = findings.filter((f) => f.category === "citation-orphan");
+  assert(orphans.length === 0, `expected 0 orphans, got ${orphans.length}: ${orphans.map(f=>f.flaggedText).join(", ")}`);
 });
 
 test("detects mixed citation styles", () => {

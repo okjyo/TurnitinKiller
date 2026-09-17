@@ -11,6 +11,9 @@ import { SYSTEM_PROMPT, buildUserPrompt } from "@/lib/llm/prompts";
 import { RawLLMResponseSchema, type RawLLMResponse } from "./schema";
 import type { AnalysisInput } from "@/lib/llm/types";
 
+/** Maximum retries when the LLM returns unparseable JSON. */
+const MAX_PARSE_RETRIES = 2;
+
 /**
  * Run LLM semantic analysis on the document.
  * The production prompt (SYSTEM_PROMPT + buildUserPrompt) is NOT modified.
@@ -32,25 +35,41 @@ export async function runLLMAnalysis(input: AnalysisInput): Promise<RawLLMRespon
     );
   }
 
-  // ── Call LLM ──
+  // ── Call LLM (with retry on malformed JSON) ──
   const userPrompt = buildUserPrompt(input.text, input.bibliography);
-  const rawResponse = await provider.complete({
-    systemPrompt: SYSTEM_PROMPT,
-    userPrompt,
-    temperature: 0.3,
-    maxTokens: 4096,
-    responseFormat: { type: "json_object" },
-  });
+  let lastError: Error | null = null;
 
-  // ── Parse + validate ──
-  return parseLLMResponse(rawResponse);
+  for (let attempt = 0; attempt <= MAX_PARSE_RETRIES; attempt++) {
+    const rawResponse = await provider.complete({
+      systemPrompt: SYSTEM_PROMPT,
+      userPrompt,
+      temperature: 0.3,
+      maxTokens: 4096,
+      responseFormat: { type: "json_object" },
+    });
+
+    try {
+      return parseLLMResponse(rawResponse, attempt);
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_PARSE_RETRIES) {
+        console.warn(
+          `[LLM] JSON parse failed on attempt ${attempt + 1}/${MAX_PARSE_RETRIES + 1}, retrying. ` +
+            `Raw response (first 300 chars): ${rawResponse.slice(0, 300)}`
+        );
+      }
+    }
+  }
+
+  throw lastError ?? new Error("LLM analysis failed after retries. Please try again.");
 }
 
 /**
  * Parse the LLM's raw text response into a validated RawLLMResponse.
  * Handles direct JSON, markdown-wrapped JSON, and validation failures.
+ * @param attempt Which attempt this is (0-indexed, for logging).
  */
-function parseLLMResponse(raw: string): RawLLMResponse {
+function parseLLMResponse(raw: string, attempt = 0): RawLLMResponse {
   let parsed: unknown;
 
   // Try direct JSON parse
@@ -60,10 +79,20 @@ function parseLLMResponse(raw: string): RawLLMResponse {
     // Try extracting JSON from markdown code blocks
     const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
     if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[1].trim());
-    } else {
-      throw new Error("Could not parse LLM response as JSON. Please try again.");
+      try {
+        parsed = JSON.parse(jsonMatch[1].trim());
+      } catch {
+        // Fall through to log + throw below
+      }
     }
+  }
+
+  if (parsed === undefined) {
+    console.error(
+      `[LLM] Failed to parse response as JSON (attempt ${attempt + 1}). ` +
+        `Raw response (first 500 chars): ${raw.slice(0, 500)}`
+    );
+    throw new Error("Could not parse LLM response as JSON. Please try again.");
   }
 
   // Zod validation

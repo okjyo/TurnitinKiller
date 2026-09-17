@@ -5,6 +5,7 @@
 import Link from "next/link";
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import DeleteDocumentButton from "@/components/delete-document-button";
+import RetryAnalysisButton from "@/components/retry-analysis-button";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export default async function DashboardPage() {
   // Fetch documents with their report status
   const { data: documents, error: fetchError } = await supabase
     .from("documents")
-    .select("id, title, created_at, reports(id)")
+    .select("id, title, created_at, status, reports(id)")
     .eq("user_id", user!.id)
     .order("created_at", { ascending: false })
     .limit(50);
@@ -54,6 +55,7 @@ export default async function DashboardPage() {
             const reportId = hasReport
               ? (doc.reports as { id: string }[])[0]?.id
               : null;
+            const status = doc.status as string;
 
             return (
               <div
@@ -74,15 +76,36 @@ export default async function DashboardPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  {hasReport && reportId ? (
+                  {status === "completed" && reportId ? (
                     <Link
                       href={`/report/${reportId}`}
                       className="rounded-md bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-100 transition"
                     >
                       View Report
                     </Link>
+                  ) : status === "failed" ? (
+                    <RetryAnalysisButton documentId={doc.id} />
                   ) : (
-                    <span className="text-xs text-gray-400">
+                    <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                      <svg
+                        className="h-3 w-3 animate-spin"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                        />
+                      </svg>
                       Analysis pending
                     </span>
                   )}

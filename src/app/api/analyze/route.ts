@@ -234,6 +234,12 @@ export async function POST(request: NextRequest) {
         bibliography: finalBibliography || undefined,
       });
     } catch (err) {
+      // Mark the document as failed so the dashboard shows a retry button
+      await supabase
+        .from("documents")
+        .update({ status: "failed" })
+        .eq("id", document.id);
+
       const message =
         err instanceof Error
           ? err.message
@@ -293,6 +299,13 @@ export async function POST(request: NextRequest) {
 
     if (reportError || !report) {
       console.error("Report insert error:", reportError);
+
+      // Mark as failed since the report couldn't be saved
+      await supabase
+        .from("documents")
+        .update({ status: "failed" })
+        .eq("id", document.id);
+
       return NextResponse.json(
         {
           error:
@@ -301,6 +314,12 @@ export async function POST(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Mark document as completed
+    await supabase
+      .from("documents")
+      .update({ status: "completed" })
+      .eq("id", document.id);
 
     return NextResponse.json({ reportId: report.id });
   } catch (err) {
