@@ -334,18 +334,18 @@ export default function AnalyzePage() {
         </div>
 
         {/* Submit */}
-        <div className="flex items-center justify-end gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
           <button
             type="button"
             onClick={() => router.back()}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+            className="order-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition sm:order-1"
           >
             Cancel
           </button>
           <button
             type="submit"
             disabled={loading || inputConflict}
-            className="rounded-md bg-brand-800 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-900 disabled:opacity-50 transition"
+            className="order-1 rounded-md bg-brand-800 px-6 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-900 disabled:opacity-50 transition sm:order-2"
           >
             {loading ? "Analyzing..." : "Analyze My Paper"}
           </button>

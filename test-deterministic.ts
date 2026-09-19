@@ -217,6 +217,48 @@ test("all findings have required fields", () => {
 });
 
 // ─────────────────────────────────────────────
+// Bibliography sanity check
+// ─────────────────────────────────────────────
+
+test("non-bibliography text triggers sanity check warning", () => {
+  const body = "Some text (Smith, 2024).";
+  const fakeBib =
+    "Please read the following instructions carefully.\n" +
+    "Your essay should be 1500 words.\n" +
+    "Make sure to include an introduction.\n" +
+    "The conclusion should summarize your argument.\n" +
+    "Submit your work by Friday.";
+  const findings = runDeterministicAnalysis(body, fakeBib);
+  const sanity = findings.filter(
+    (f) => f.category === "structural-issue" && f.issue.includes("doesn't look like a typical reference list")
+  );
+  assert(sanity.length === 1, `expected 1 sanity check finding, got ${sanity.length}`);
+});
+
+test("real bibliography does NOT trigger sanity check", () => {
+  const body = "According to Smith (2024), this is true.";
+  const realBib =
+    "Smith, J. (2024). Title of the article. Journal of Testing, 12(3), 45–67.\n" +
+    "Jones, A. (2023). Another title. Annual Review, 8(1), 100–120.\n" +
+    "Lee, B. (2022). Third title. Science Today, 5(2), 30–40.";
+  const findings = runDeterministicAnalysis(body, realBib);
+  const sanity = findings.filter(
+    (f) => f.category === "structural-issue" && f.issue.includes("doesn't look like a typical reference list")
+  );
+  assert(sanity.length === 0, `expected 0 sanity check findings, got ${sanity.length}`);
+});
+
+test("short bibliography (< 3 lines) skips sanity check", () => {
+  const body = "Some text (Smith, 2024).";
+  const shortBib = "Not a real reference\nAnother line";
+  const findings = runDeterministicAnalysis(body, shortBib);
+  const sanity = findings.filter(
+    (f) => f.category === "structural-issue" && f.issue.includes("doesn't look like a typical reference list")
+  );
+  assert(sanity.length === 0, `expected 0 sanity check findings for short bib, got ${sanity.length}`);
+});
+
+// ─────────────────────────────────────────────
 // Summary
 // ─────────────────────────────────────────────
 

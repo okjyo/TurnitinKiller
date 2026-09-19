@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, Libre_Baskerville } from "next/font/google";
 import "./globals.css";
 
@@ -8,6 +8,11 @@ const libreBaskerville = Libre_Baskerville({
   subsets: ["latin"],
   variable: "--font-libre",
 });
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+};
 
 export const metadata: Metadata = {
   title: "Originality Assistant",
@@ -21,7 +26,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${inter.variable} ${libreBaskerville.variable}`}>
-      <body className="font-sans">{children}</body>
+      <body className="font-sans overflow-x-hidden">{children}</body>
     </html>
   );
 }

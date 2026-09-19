@@ -286,6 +286,36 @@ export function runDeterministicAnalysis(
   // ── Parse bibliography entries ──
   const bibEntries = parseBibliographyEntries(bibliography);
 
+  // ── Bibliography sanity check ──────────────────────────────
+  // If most parsed entries fell through to the raw fallback
+  // (key starts with "raw:"), the input probably isn't a real
+  // reference list (e.g. accidentally pasted essay text).
+  // Warn and skip orphan matching — it would be meaningless.
+  const rawFallbackCount = bibEntries.filter((e) => e.key.startsWith("raw:")).length;
+  const matchRatio = bibEntries.length > 0
+    ? (bibEntries.length - rawFallbackCount) / bibEntries.length
+    : 1;
+  if (bibEntries.length >= 3 && matchRatio < 0.2) {
+    findings.push(createFinding({
+      flaggedText:
+        bibliography.length > 120
+          ? bibliography.slice(0, 120) + "..."
+          : bibliography,
+      issue:
+        "This section doesn't look like a typical reference list. " +
+        "Very few lines matched the expected format (author name + year). " +
+        "You may have pasted the wrong content.",
+      suggestedFix:
+        "Double-check that you pasted your bibliography or reference list, " +
+        "not body text or assignment instructions. If your references use an " +
+        "unusual format, you can paste them separately next time for more accurate analysis.",
+      category: "structural-issue",
+      source,
+      confidence,
+    }));
+    return findings;
+  }
+
   // ── Match citations ↔ bibliography ──
   const citedKeys = new Set(citations.map((c) => c.key));
   const bibKeys = new Set(bibEntries.map((e) => e.key));

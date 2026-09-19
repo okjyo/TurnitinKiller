@@ -15,26 +15,27 @@ export default async function DashboardPage() {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Fetch documents with their report status
+  // Fetch documents — no need to join reports anymore since
+  // the report page fetches by documentId
   const { data: documents, error: fetchError } = await supabase
     .from("documents")
-    .select("id, title, created_at, status, reports(id)")
+    .select("id, title, created_at, status")
     .eq("user_id", user!.id)
     .order("created_at", { ascending: false })
     .limit(50);
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-gray-900">My Papers</h1>
+          <h1 className="text-xl font-semibold text-gray-900 sm:text-2xl">My Papers</h1>
           <p className="mt-1 text-sm text-gray-500">
             Review your past analyses or start a new one.
           </p>
         </div>
         <Link
           href="/analyze"
-          className="rounded-md bg-brand-800 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-900 transition"
+          className="inline-flex items-center justify-center rounded-md bg-brand-800 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-brand-900 transition"
         >
           + New Analysis
         </Link>
@@ -50,20 +51,15 @@ export default async function DashboardPage() {
       ) : documents && documents.length > 0 ? (
         <div className="mt-6 divide-y divide-gray-200 rounded-md border border-gray-200 bg-white">
           {documents.map((doc) => {
-            const hasReport =
-              Array.isArray(doc.reports) && doc.reports.length > 0;
-            const reportId = hasReport
-              ? (doc.reports as { id: string }[])[0]?.id
-              : null;
             const status = doc.status as string;
 
             return (
               <div
                 key={doc.id}
-                className="flex items-center justify-between px-5 py-4"
+                className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5 sm:py-4"
               >
-                <div>
-                  <h3 className="text-sm font-medium text-gray-900">
+                <div className="min-w-0">
+                  <h3 className="truncate text-sm font-medium text-gray-900">
                     {doc.title}
                   </h3>
                   <p className="mt-0.5 text-xs text-gray-500">
@@ -75,10 +71,10 @@ export default async function DashboardPage() {
                     })}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  {status === "completed" && reportId ? (
+                <div className="flex items-center gap-2 sm:gap-3">
+                  {status === "completed" ? (
                     <Link
-                      href={`/report/${reportId}`}
+                      href={`/report/${doc.id}`}
                       className="rounded-md bg-brand-50 px-3 py-1.5 text-sm font-medium text-brand-700 hover:bg-brand-100 transition"
                     >
                       View Report

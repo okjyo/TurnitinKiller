@@ -1,43 +1,39 @@
 // ============================================================
 // Report section — expandable card grouping findings by category
+//
+// Accepts children (rendered inside the section body) so the
+// parent can pass whatever card layout it needs.
 // ============================================================
 
 "use client";
 
-import { useState } from "react";
-import type { Finding } from "@/lib/types";
-import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "@/lib/constants";
-import FindingCard from "./finding-card";
+import { useState, type ReactNode } from "react";
 
 interface Props {
-  category: string;
-  findings: Finding[];
+  title: string;
+  description: string;
+  count: number;
+  icon: string;
+  bgClass: string;
+  borderClass: string;
+  textClass: string;
+  children: ReactNode;
 }
 
-export default function ReportSection({ category, findings }: Props) {
+export default function ReportSection({
+  title,
+  description,
+  count,
+  icon,
+  bgClass,
+  borderClass,
+  textClass,
+  children,
+}: Props) {
   const [expanded, setExpanded] = useState(true);
-  const label = CATEGORY_LABELS[category] || category;
-  const description = CATEGORY_DESCRIPTIONS[category] || "";
-
-  // Category-specific icon color
-  const colorMap: Record<string, string> = {
-    "citation-missing": "bg-amber-100 text-amber-700",
-    "citation-orphan": "bg-orange-100 text-orange-700",
-    "bibliography-orphan": "bg-purple-100 text-purple-700",
-    "generic-paragraph": "bg-blue-100 text-blue-700",
-    "structural-issue": "bg-gray-100 text-gray-700",
-  };
-
-  const dotColorMap: Record<string, string> = {
-    "citation-missing": "bg-amber-500",
-    "citation-orphan": "bg-orange-500",
-    "bibliography-orphan": "bg-purple-500",
-    "generic-paragraph": "bg-blue-500",
-    "structural-issue": "bg-gray-500",
-  };
 
   return (
-    <div className="rounded-md border border-gray-200 bg-white shadow-sm">
+    <div className={`rounded-md border ${borderClass} bg-white shadow-sm`}>
       {/* Section header */}
       <button
         onClick={() => setExpanded(!expanded)}
@@ -45,37 +41,37 @@ export default function ReportSection({ category, findings }: Props) {
       >
         <div className="flex items-center gap-3">
           <span
-            className={`flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold ${colorMap[category] || "bg-gray-100 text-gray-700"}`}
+            className={`flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold ${bgClass} ${textClass}`}
           >
-            {findings.length}
+            {count}
           </span>
           <div>
-            <h3 className="text-sm font-semibold text-gray-900">{label}</h3>
+            <h3 className="text-sm font-semibold text-gray-900">
+              {icon} {title}
+            </h3>
             <p className="text-xs text-gray-500">{description}</p>
           </div>
         </div>
         <svg
-          className={`h-5 w-5 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+          className={`h-5 w-5 text-gray-400 transition-transform ${
+            expanded ? "rotate-180" : ""
+          }`}
           fill="none"
           viewBox="0 0 24 24"
           strokeWidth={2}
           stroke="currentColor"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            d="m19.5 8.25-7.5 7.5-7.5-7.5"
+          />
         </svg>
       </button>
 
-      {/* Findings list */}
+      {/* Section body */}
       {expanded && (
-        <div className="border-t border-gray-100 px-5 py-4 space-y-3">
-          {findings.map((finding) => (
-            <FindingCard
-              key={finding.id}
-              finding={finding}
-              dotColor={dotColorMap[category] || "bg-gray-500"}
-            />
-          ))}
-        </div>
+        <div className="border-t border-gray-100 px-5 py-4">{children}</div>
       )}
     </div>
   );
