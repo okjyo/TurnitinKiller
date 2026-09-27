@@ -11,7 +11,7 @@ export default function AuthLayout({
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-gray-50 px-4">
+    <main className="flex min-h-screen flex-col items-center justify-center paper-texture px-4">
       <Link href="/" className="mb-8 font-serif text-2xl font-bold text-brand-900">
         {APP_NAME}
       </Link>

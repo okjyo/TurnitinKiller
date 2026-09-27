@@ -28,6 +28,9 @@ export const CATEGORY_LABELS: Record<string, string> = {
   "bibliography-orphan": "Unused Source",
   "generic-paragraph": "Strengthen This Paragraph",
   "structural-issue": "Formatting Check",
+  "source-match": "Possible Source Match",
+  "paraphrase-risk": "Paraphrase Risk",
+  "style-inconsistency": "Style Shift",
 };
 
 /** Finding category descriptions */
@@ -37,4 +40,7 @@ export const CATEGORY_DESCRIPTIONS: Record<string, string> = {
   "bibliography-orphan": "These bibliography entries aren't cited anywhere in your text.",
   "generic-paragraph": "These paragraphs could be stronger with specific evidence or examples.",
   "structural-issue": "Basic structural checks to make sure your paper follows consistent conventions.",
+  "source-match": "These passages closely match content found on public web pages. Verify the source and add a citation if you used it.",
+  "paraphrase-risk": "These passages are structured similarly to common sources on this topic. Consider rewriting in your own words and citing the original idea.",
+  "style-inconsistency": "This section's vocabulary or sentence structure differs noticeably from the rest of your paper, which may indicate unattributed copy-paste.",
 };

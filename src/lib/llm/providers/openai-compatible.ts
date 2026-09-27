@@ -28,6 +28,9 @@ function sleep(ms: number): Promise<void> {
 // ─────────────────────────────────────────────
 
 function sanitizeError(err: unknown): Error {
+  // Log the actual error for debugging — the user-facing message is generic
+  console.error("[LLM] Raw error before sanitization:", err);
+
   if (err instanceof Error) {
     if (err.name === "AbortError") {
       return new Error(
@@ -40,6 +43,9 @@ function sanitizeError(err: unknown): Error {
       return new Error(
         `The analysis service returned an error (status ${status}). Please try again.`
       );
+    }
+    if (err.message.startsWith("LLM returned empty")) {
+      return new Error(err.message);
     }
   }
   return new Error("Something went wrong during analysis. Please try again.");
@@ -123,9 +129,27 @@ export class OpenAICompatibleProvider implements LLMProvider {
         }
 
         const data = await response.json();
-        const content = data.choices?.[0]?.message?.content;
+        const message = data.choices?.[0]?.message;
+        let content = message?.content;
+
+        // Some reasoning models (e.g., mimo-v2.5-pro) put the actual output
+        // in reasoning_content when content is empty. Fall back to that.
+        if (!content && message?.reasoning_content) {
+          console.warn("[LLM] content field empty, falling back to reasoning_content");
+          content = message.reasoning_content;
+        }
 
         if (!content) {
+          // Log what the model actually returned — helps debug reasoning models
+          // that may put output in reasoning_content instead of content
+          console.error(
+            "[LLM] Empty content field. Raw message keys:",
+            Object.keys(message ?? {}),
+            "reasoning_content length:",
+            message?.reasoning_content?.length ?? 0,
+            "finish_reason:",
+            data.choices?.[0]?.finish_reason
+          );
           throw new Error("LLM returned empty response. Please try again.");
         }
 
@@ -135,7 +159,19 @@ export class OpenAICompatibleProvider implements LLMProvider {
 
         if (err instanceof Error && err.name === "AbortError") {
           lastError = err;
-          if (attempt < MAX_RETRIES) continue;
+          if (attempt < MAX_RETRIES) {
+            console.warn(`[LLM] Request timed out on attempt ${attempt + 1}/${MAX_RETRIES + 1}, retrying.`);
+            continue;
+          }
+        }
+
+        // Already-sanitized errors (from the !content or !response.ok paths) pass through
+        if (err instanceof Error && (
+          err.message.startsWith("LLM returned empty") ||
+          err.message.startsWith("The analysis") ||
+          err.message.startsWith("Something went wrong")
+        )) {
+          throw err;
         }
 
         throw sanitizeError(err);

@@ -17,6 +17,9 @@ export const FindingCategorySchema = z.enum([
   "bibliography-orphan",
   "generic-paragraph",
   "structural-issue",
+  "source-match",
+  "paraphrase-risk",
+  "style-inconsistency",
 ]);
 export type FindingCategory = z.infer<typeof FindingCategorySchema>;
 
@@ -47,6 +50,7 @@ export const FindingSchema = z.object({
   severity: SeveritySchema,
   confidence: z.number().min(0).max(1),
   source: FindingSourceSchema,
+  sourceUrl: z.string().url().nullable().optional(),
 });
 export type Finding = z.infer<typeof FindingSchema>;
 
@@ -63,11 +67,30 @@ export const RawLLMFindingSchema = z.object({
 });
 export type RawLLMFinding = z.infer<typeof RawLLMFindingSchema>;
 
+export const RawLLMRecommendationSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(1000),
+  priority: z.enum(["high", "medium", "low"]),
+});
+export type RawLLMRecommendation = z.infer<typeof RawLLMRecommendationSchema>;
+
 export const RawLLMResponseSchema = z.object({
   findings: z.array(RawLLMFindingSchema),
+  recommendations: z.array(RawLLMRecommendationSchema).optional(),
   summary: z.string().min(1),
 });
 export type RawLLMResponse = z.infer<typeof RawLLMResponseSchema>;
+
+// ─────────────────────────────────────────────
+// Recommendations — high-level coaching advice
+// ─────────────────────────────────────────────
+
+export const RecommendationSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().min(1).max(1000),
+  priority: z.enum(["high", "medium", "low"]),
+});
+export type Recommendation = z.infer<typeof RecommendationSchema>;
 
 // ─────────────────────────────────────────────
 // Report data (the final output stored in the DB)
@@ -76,12 +99,14 @@ export type RawLLMResponse = z.infer<typeof RawLLMResponseSchema>;
 export const ReportMetaSchema = z.object({
   deterministicFindings: z.number().int().min(0),
   llmFindings: z.number().int().min(0),
+  similarityFindings: z.number().int().min(0).optional(),
   processingTimeMs: z.number().int().min(0),
 });
 export type ReportMeta = z.infer<typeof ReportMetaSchema>;
 
 export const ReportDataSchema = z.object({
   findings: z.array(FindingSchema),
+  recommendations: z.array(RecommendationSchema).optional(),
   summary: z.string().min(1).max(2000),
   analyzedAt: z.string().datetime(),
   meta: ReportMetaSchema,
@@ -103,10 +128,16 @@ export interface LegacyFinding {
   severity?: string;
   confidence?: number;
   source?: string;
+  sourceUrl?: string | null;
 }
 
 export interface LegacyReportData {
   findings: LegacyFinding[];
+  recommendations?: Array<{
+    title: string;
+    description: string;
+    priority: string;
+  }>;
   summary: string;
   analyzedAt?: string;
   meta?: ReportMeta;
@@ -118,6 +149,9 @@ const VALID_CATEGORIES: FindingCategory[] = [
   "bibliography-orphan",
   "generic-paragraph",
   "structural-issue",
+  "source-match",
+  "paraphrase-risk",
+  "style-inconsistency",
 ];
 
 const VALID_SEVERITIES: Severity[] = ["low", "medium", "high"];
@@ -156,10 +190,35 @@ export function parseReportData(raw: unknown): ReportData {
           ? f.confidence
           : 0.7,
       source: f.source === "deterministic" ? "deterministic" : "llm",
+      sourceUrl: typeof f.sourceUrl === "string" && f.sourceUrl.trim()
+        ? f.sourceUrl.trim()
+        : null,
     }));
+
+  const VALID_PRIORITIES = ["high", "medium", "low"] as const;
+
+  const recommendations = Array.isArray(data.recommendations)
+    ? data.recommendations
+        .filter(
+          (r) =>
+            r &&
+            typeof r.title === "string" &&
+            r.title.trim() &&
+            typeof r.description === "string" &&
+            r.description.trim()
+        )
+        .map((r) => ({
+          title: r.title.trim().slice(0, 200),
+          description: r.description.trim().slice(0, 1000),
+          priority: VALID_PRIORITIES.includes(r.priority as typeof VALID_PRIORITIES[number])
+            ? (r.priority as "high" | "medium" | "low")
+            : ("medium" as const),
+        }))
+    : undefined;
 
   return {
     findings,
+    recommendations,
     summary:
       typeof data.summary === "string" && data.summary.trim()
         ? data.summary

@@ -8,7 +8,7 @@
 "use client";
 
 import { useMemo } from "react";
-import type { Finding, Severity, FindingCategory } from "@/lib/types";
+import type { Finding, Severity, FindingCategory, Recommendation } from "@/lib/types";
 import { CATEGORY_LABELS, CATEGORY_DESCRIPTIONS } from "@/lib/constants";
 import {
   useReportState,
@@ -20,6 +20,8 @@ import {
 import FindingCard from "@/components/finding-card";
 import ReportSection from "@/components/report-section";
 import ReanalyzeButton from "@/components/reanalyze-button";
+import SimilaritySection from "@/components/similarity-section";
+import { Recommendations } from "@/components/recommendations";
 import Link from "next/link";
 
 // ── colours per severity (used for top-level summary badges) ───
@@ -154,6 +156,7 @@ interface Props {
   documentId: string;
   summary: string;
   findings: Finding[];
+  recommendations?: Recommendation[];
   rawText: string;
   bibliographyText: string;
 }
@@ -163,6 +166,7 @@ export default function ReportContent({
   documentId,
   summary,
   findings,
+  recommendations,
   rawText,
   bibliographyText,
 }: Props) {
@@ -209,6 +213,29 @@ export default function ReportContent({
     return map;
   }, [activeFindings]);
 
+  // ── Separate similarity findings from main findings ──────────
+  const mainFindings = useMemo(
+    () =>
+      findings.filter(
+        (f) =>
+          f.category !== "source-match" &&
+          f.category !== "paraphrase-risk" &&
+          f.category !== "style-inconsistency"
+      ),
+    [findings]
+  );
+
+  const similarityFindings = useMemo(
+    () =>
+      findings.filter(
+        (f) =>
+          f.category === "source-match" ||
+          f.category === "paraphrase-risk" ||
+          f.category === "style-inconsistency"
+      ),
+    [findings]
+  );
+
   const totalDismissed = findings.length - activeFindings.length;
 
   return (
@@ -242,7 +269,7 @@ export default function ReportContent({
       <PositiveObservations items={positives} />
 
       {/* ── Findings by category (or explicit empty state) ───────── */}
-      {activeFindings.length === 0 ? (
+      {mainFindings.length === 0 ? (
         <div className="rounded-lg border border-green-200 bg-green-50 p-6 text-center">
           <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-green-100">
             <svg
@@ -320,6 +347,19 @@ export default function ReportContent({
         )}
       </div>
       )}
+
+      {/* ── Priority recommendations ─────────────────────────────── */}
+      <Recommendations recommendations={recommendations ?? []} />
+
+      {/* ── Originality / Similarity check ───────────────────────── */}
+      <SimilaritySection
+        documentId={documentId}
+        similarityFindings={similarityFindings}
+        dismissed={dismissed}
+        reviewed={reviewed}
+        dismiss={dismiss}
+        markReviewed={markReviewed}
+      />
 
       {/* ── Submission checklist ─────────────────────────────────── */}
       <SubmissionChecklist

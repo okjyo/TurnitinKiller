@@ -9,6 +9,7 @@
 export type {
   Finding,
   FindingCategory,
+  Recommendation,
   ReportData,
   ReportMeta,
   Severity,

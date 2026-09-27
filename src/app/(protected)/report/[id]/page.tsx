@@ -67,10 +67,10 @@ export default async function ReportPage({ params }: Props) {
     <>
       {/* Header */}
       <div className="mb-6">
-        <p className="text-xs uppercase tracking-wider text-gray-500">
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-600">
           Originality report
         </p>
-        <h1 className="mt-1 font-serif text-xl text-brand-900 sm:text-2xl">
+        <h1 className="mt-2 font-serif text-2xl font-bold text-brand-900 sm:text-3xl">
           {document.title}
         </h1>
         <p className="text-sm text-gray-500">
@@ -88,6 +88,7 @@ export default async function ReportPage({ params }: Props) {
         documentId={document.id}
         summary={parsed.summary}
         findings={parsed.findings}
+        recommendations={parsed.recommendations}
         rawText={document.raw_text}
         bibliographyText={document.bibliography_text ?? ""}
       />

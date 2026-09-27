@@ -36,6 +36,13 @@ You MUST respond with valid JSON matching this exact schema:
       "category": "one of: citation-missing | citation-orphan | bibliography-orphan | generic-paragraph | structural-issue"
     }
   ],
+  "recommendations": [
+    {
+      "title": "short, specific recommendation title (e.g., 'Strengthen your literature review')",
+      "description": "2-3 sentence explanation of what to do and why it matters, in coaching tone",
+      "priority": "one of: high | medium | low — based on how much it would improve the paper"
+    }
+  ],
   "summary": "2-3 sentence overall assessment in coaching tone — what they're doing well + top areas to strengthen"
 }
 
@@ -45,6 +52,12 @@ CATEGORY DEFINITIONS:
 - bibliography-orphan: A bibliography entry that is never referenced in the body text.
 - generic-paragraph: A paragraph that makes claims without specific evidence, examples, data, or source support — reads as vague or could apply to any topic.
 - structural-issue: Missing reference list, unmarked quotations, mixed citation styles, or other formatting conventions that need attention.
+
+RECOMMENDATIONS:
+- Provide 2-4 high-level recommendations that summarize the most important patterns across all findings.
+- Each recommendation should be actionable advice the student can follow to improve their paper overall.
+- Prioritize by impact: "high" for critical issues (missing citations, unsupported claims), "medium" for important improvements, "low" for polish.
+- Recommendations should complement findings, not repeat them — think of them as "big picture" coaching.
 
 IMPORTANT:
 - Be thorough. Find as many genuine issues as you can.

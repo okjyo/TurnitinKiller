@@ -22,6 +22,9 @@ export const SEVERITY_MAP: Record<FindingCategory, Severity> = {
   "bibliography-orphan": "medium",
   "generic-paragraph": "medium",
   "structural-issue": "low",
+  "source-match": "high",
+  "paraphrase-risk": "medium",
+  "style-inconsistency": "low",
 };
 
 /**

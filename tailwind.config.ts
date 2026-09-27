@@ -9,18 +9,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Deep ink-blue — evokes pen-on-paper, academic integrity
+        // Deep forest green — academic, editorial, grounded
         brand: {
-          50:  "#f0f4f8",
-          100: "#d9e2ec",
-          200: "#bcccdc",
-          300: "#9fb3c8",
-          400: "#829ab1",
-          500: "#627d98",
-          600: "#486581",
-          700: "#334e68",
-          800: "#243b53",
-          900: "#102a43",
+          50:  "#f2f5f0",
+          100: "#e0e8db",
+          200: "#c3d1b9",
+          300: "#9fb68e",
+          400: "#7a9a66",
+          500: "#5c7d4a",
+          600: "#476338",
+          700: "#384e2e",
+          800: "#2d3e25",
+          900: "#1e2b1a",
         },
       },
       fontFamily: {

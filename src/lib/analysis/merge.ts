@@ -10,6 +10,7 @@ import {
   type Finding,
   type ReportData,
   type RawLLMResponse,
+  type Recommendation,
 } from "./schema";
 import { SEVERITY_MAP, DEFAULT_CONFIDENCE } from "./severity";
 
@@ -62,8 +63,15 @@ export function mergeFindings(
   // Merge: deterministic first (higher confidence), then LLM
   const allFindings = [...deterministicFindings, ...mergedLLMFindings];
 
+  // Pass recommendations through from the LLM response (already validated by Zod)
+  const recommendations: Recommendation[] | undefined =
+    llmResult.recommendations && llmResult.recommendations.length > 0
+      ? llmResult.recommendations
+      : undefined;
+
   const reportData: ReportData = {
     findings: allFindings,
+    recommendations,
     summary: llmResult.summary,
     analyzedAt: new Date().toISOString(),
     meta: {
